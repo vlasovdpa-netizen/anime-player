@@ -1,0 +1,135 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Anime Player</title>
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Segoe UI', system-ui, sans-serif; }
+        body { background: #0b0b0e; color: #f0f0f5; padding: 14px; user-select: none; }
+        .header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; }
+        .title { font-size: 18px; font-weight: 700; color: #fff; }
+        .badge { background: #1f1f27; border: 1px solid #333342; padding: 4px 10px; border-radius: 8px; font-size: 12px; color: #a0a0b8; }
+        
+        .video-box { width: 100%; aspect-ratio: 16/9; background: #000; border-radius: 14px; overflow: hidden; border: 1px solid #22222c; box-shadow: 0 8px 30px rgba(0,0,0,0.6); position: relative; }
+        video { width: 100%; height: 100%; outline: none; }
+
+        .controls-row { display: flex; gap: 10px; margin-top: 14px; align-items: center; justify-content: space-between; }
+        select { background: #16161d; color: #fff; border: 1px solid #2c2c3a; padding: 10px 14px; border-radius: 10px; font-size: 14px; outline: none; flex: 1; }
+        
+        .episodes-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(64px, 1fr)); gap: 8px; margin-top: 16px; max-height: 220px; overflow-y: auto; padding-right: 4px; }
+        .ep-btn { background: #16161d; border: 1px solid #262633; color: #ccc; padding: 10px 0; border-radius: 10px; text-align: center; font-size: 13px; font-weight: 600; cursor: pointer; transition: 0.15s; }
+        .ep-btn:hover { background: #22222e; }
+        .ep-btn.active { background: #fff; color: #000; border-color: #fff; }
+        .status { color: #888; font-size: 13px; margin-top: 12px; text-align: center; }
+    </style>
+</head>
+<body>
+
+    <div class="header">
+        <div class="title" id="anime-title">Загрузка аниме...</div>
+        <div class="badge" id="quality-badge">1080p FHD</div>
+    </div>
+
+    <div class="video-box">
+        <video id="video" controls playsinline></video>
+    </div>
+
+    <div class="controls-row">
+        <select id="quality-select">
+            <option value="fhd">1080p (Full HD)</option>
+            <option value="hd">720p (HD)</option>
+            <option value="sd">480p (SD)</option>
+        </select>
+    </div>
+
+    <div class="episodes-grid" id="episodes-list"></div>
+    <div class="status" id="status-text">Подключаемся к серверу видео...</div>
+
+    <script>
+        const tg = window.Telegram.WebApp;
+        tg.expand();
+
+        const params = new URLSearchParams(window.location.search);
+        const query = params.get('q') || 'Человек-бензопила';
+
+        const video = document.getElementById('video');
+        const titleEl = document.getElementById('anime-title');
+        const epListEl = document.getElementById('episodes-list');
+        const statusEl = document.getElementById('status-text');
+        const qualitySelect = document.getElementById('quality-select');
+        const qualityBadge = document.getElementById('quality-badge');
+
+        let currentAnime = null;
+        let currentEpisode = 1;
+        let hls = null;
+
+        async function loadAnime(searchQuery) {
+            try {
+                const res = await fetch(`https://api.anilibria.tv/v3/title/search?search=${encodeURIComponent(searchQuery)}&limit=1`);
+                const data = await res.json();
+
+                if (!data.list || data.list.length === 0) {
+                    statusEl.textContent = "Тайтл не найден в прямой базе, попробуй другой!";
+                    return;
+                }
+
+                currentAnime = data.list[0];
+                titleEl.textContent = currentAnime.names.ru;
+                statusEl.textContent = `Озвучка: AniLibria • Серий: ${currentAnime.player.episodes.last}`;
+
+                renderEpisodes();
+                playEpisode(1);
+            } catch (e) {
+                statusEl.textContent = "Ошибка загрузки потока.";
+            }
+        }
+
+        function renderEpisodes() {
+            epListEl.innerHTML = '';
+            const list = currentAnime.player.list;
+            Object.keys(list).forEach(epNum => {
+                const btn = document.createElement('div');
+                btn.className = 'ep-btn' + (Number(epNum) === currentEpisode ? ' active' : '');
+                btn.textContent = `${epNum} сер.`;
+                btn.onclick = () => playEpisode(Number(epNum));
+                epListEl.appendChild(btn);
+            });
+        }
+
+        function playEpisode(epNum) {
+            currentEpisode = epNum;
+            document.querySelectorAll('.ep-btn').forEach((b, idx) => {
+                b.classList.toggle('active', b.textContent === `${epNum} сер.`);
+            });
+
+            const epData = currentAnime.player.list[epNum];
+            const host = currentAnime.player.host;
+            const q = qualitySelect.value;
+            const streamPath = epData.hls[q] || epData.hls.hd || epData.hls.sd;
+            const streamUrl = `https://${host}${streamPath}`;
+
+            qualityBadge.textContent = q.toUpperCase();
+
+            if (Hls.isSupported()) {
+                if (hls) hls.destroy();
+                hls = new Hls();
+                hls.loadSource(streamUrl);
+                hls.attachMedia(video);
+                hls.on(Hls.Events.MANIFEST_PARSED, () => video.play());
+            } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
+                video.src = streamUrl;
+                video.play();
+            }
+        }
+
+        qualitySelect.onchange = () => {
+            if (currentAnime) playEpisode(currentEpisode);
+        };
+
+        loadAnime(query);
+    </script>
+</body>
+</html>
