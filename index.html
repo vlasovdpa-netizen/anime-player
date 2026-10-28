@@ -3,250 +3,232 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Anime Player v2</title>
+    <title>Anime Player Pro</title>
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
     <style>
-        * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Segoe UI', system-ui, sans-serif; }
-        body { background: #0b0b0e; color: #f0f0f5; padding: 14px; user-select: none; }
+        * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; }
+        body { background: #0c0d14; color: #f3f4f6; padding: 12px; user-select: none; }
         
-        .shiki-card { display: flex; gap: 12px; background: #14141b; border: 1px solid #232330; padding: 10px; border-radius: 12px; margin-bottom: 12px; align-items: center; }
-        .poster { width: 52px; height: 74px; border-radius: 8px; object-fit: cover; background: #222; flex-shrink: 0; }
+        .card { display: flex; gap: 10px; background: #151824; border: 1px solid #23283b; padding: 10px; border-radius: 12px; margin-bottom: 10px; align-items: center; }
+        .poster { width: 48px; height: 68px; border-radius: 8px; object-fit: cover; background: #1c2030; flex-shrink: 0; }
         .info { flex: 1; overflow: hidden; }
         .title { font-size: 15px; font-weight: 700; color: #fff; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-        .meta { font-size: 12px; color: #9a9ab0; margin-top: 4px; }
-        .badge { display: inline-block; background: #1e293b; color: #38bdf8; padding: 2px 8px; border-radius: 6px; font-size: 11px; font-weight: 600; margin-top: 5px; }
+        .meta { font-size: 11px; color: #94a3b8; margin-top: 3px; }
+        .badge { display: inline-block; background: #22293f; color: #38bdf8; padding: 2px 8px; border-radius: 6px; font-size: 10px; font-weight: 600; margin-top: 4px; }
+        .vip-badge { background: #f59e0b; color: #000; font-weight: 700; }
 
-        .video-box { width: 100%; aspect-ratio: 16/9; background: #000; border-radius: 14px; overflow: hidden; border: 1px solid #22222c; box-shadow: 0 8px 30px rgba(0,0,0,0.6); position: relative; }
+        .video-wrapper { position: relative; width: 100%; aspect-ratio: 16/9; background: #000; border-radius: 12px; overflow: hidden; border: 1px solid #24293d; }
         video { width: 100%; height: 100%; outline: none; }
 
-        .controls-row { display: flex; gap: 8px; margin-top: 12px; }
-        select, input { background: #16161d; color: #fff; border: 1px solid #2c2c3a; padding: 10px 12px; border-radius: 10px; font-size: 13px; outline: none; }
-        select { width: 125px; }
-        input { flex: 1; min-width: 0; }
-        .search-btn { background: #5865F2; color: #fff; border: none; padding: 0 14px; border-radius: 10px; font-weight: 600; cursor: pointer; }
+        .fs-btn { position: absolute; top: 8px; right: 8px; z-index: 20; background: rgba(15, 23, 42, 0.75); border: 1px solid #334155; color: #fff; border-radius: 8px; padding: 6px 10px; font-size: 12px; font-weight: 600; cursor: pointer; backdrop-filter: blur(4px); }
+        .fs-btn:hover { background: rgba(56, 189, 248, 0.85); color: #000; }
 
-        .episodes-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(62px, 1fr)); gap: 8px; margin-top: 14px; max-height: 200px; overflow-y: auto; padding-right: 4px; }
-        .ep-btn { background: #16161d; border: 1px solid #262633; color: #ccc; padding: 10px 0; border-radius: 10px; text-align: center; font-size: 13px; font-weight: 600; cursor: pointer; transition: 0.15s; }
-        .ep-btn.active { background: #5865F2; color: #fff; border-color: #5865F2; }
+        .paywall-overlay { display: none; position: absolute; inset: 0; background: rgba(12, 13, 20, 0.95); z-index: 30; flex-direction: column; align-items: center; justify-content: center; text-align: center; padding: 16px; }
+        .paywall-overlay h3 { font-size: 17px; margin-bottom: 6px; color: #f59e0b; }
+        .paywall-overlay p { font-size: 12px; color: #cbd5e1; margin-bottom: 14px; max-width: 260px; line-height: 1.4; }
+        .buy-btn { background: linear-gradient(135deg, #f59e0b, #d97706); color: #000; border: none; font-weight: 700; padding: 10px 18px; border-radius: 10px; font-size: 13px; cursor: pointer; }
 
-        .status { color: #9a9ab0; font-size: 12px; margin-top: 12px; text-align: center; line-height: 1.4; }
-        .fallback-btn { display: none; width: 100%; margin-top: 10px; background: #5865F2; color: #fff; border: none; padding: 11px; border-radius: 10px; font-size: 13px; font-weight: 600; cursor: pointer; text-align: center; text-decoration: none; }
+        .controls { display: flex; gap: 8px; margin-top: 10px; }
+        input, select { background: #151824; color: #fff; border: 1px solid #23283b; padding: 8px 10px; border-radius: 8px; font-size: 12px; outline: none; }
+        input { flex: 1; }
+        select { width: 110px; }
+        .search-btn { background: #38bdf8; color: #000; border: none; padding: 0 14px; border-radius: 8px; font-weight: 700; font-size: 12px; cursor: pointer; }
+
+        .episodes-title { font-size: 13px; font-weight: 600; margin: 12px 0 6px; color: #94a3b8; }
+        .ep-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(58px, 1fr)); gap: 6px; max-height: 170px; overflow-y: auto; }
+        .ep-item { background: #151824; border: 1px solid #23283b; color: #cbd5e1; padding: 8px 0; border-radius: 8px; text-align: center; font-size: 12px; font-weight: 600; cursor: pointer; position: relative; }
+        .ep-item.active { background: #38bdf8; color: #000; border-color: #38bdf8; }
+        .ep-item.locked { color: #64748b; background: #0f111a; border-style: dashed; }
+        .status { text-align: center; font-size: 11px; color: #64748b; margin-top: 10px; }
     </style>
 </head>
 <body>
 
-    <div class="shiki-card">
-        <img id="anime-poster" class="poster" src="https://shikimori.one/favicons/favicon-96x96.png" alt="poster">
+    <div class="card">
+        <img id="poster" class="poster" src="https://anilibria.top/favicon.ico" alt="poster">
         <div class="info">
-            <div class="title" id="anime-title">Подключение...</div>
-            <div class="meta" id="anime-meta">Загружаем поток...</div>
-            <div class="badge">Multi-Server HLS • 1080p</div>
+            <div class="title" id="title">Загрузка тайтла...</div>
+            <div class="meta" id="meta">Подключение к серверам...</div>
+            <div class="badge" id="vip-status">Бесплатный режим</div>
         </div>
     </div>
 
-    <div class="video-box">
+    <div class="video-wrapper" id="video-box">
+        <button class="fs-btn" onclick="toggleFullscreen()">⛶ Экран</button>
         <video id="video" controls playsinline></video>
+        
+        <div class="paywall-overlay" id="paywall">
+            <h3>🔒 Серия доступна по VIP</h3>
+            <p>Первые 2 серии открыты для всех. Оформи VIP-подписку в боте, чтобы смотреть все сезоны в 1080p!</p>
+            <button class="buy-btn" onclick="openVipPurchase()">Купить VIP за Telegram Stars</button>
+        </div>
     </div>
 
-    <div class="controls-row">
-        <input type="text" id="search-input" placeholder="Найти другое аниме...">
-        <button class="search-btn" onclick="manualSearch()">Найти</button>
-        <select id="quality-select">
+    <div class="controls">
+        <input type="text" id="query" placeholder="Найти другое аниме...">
+        <button class="search-btn" onclick="searchNew()">Найти</button>
+        <select id="quality" onchange="switchQuality()">
             <option value="1080">1080p FHD</option>
             <option value="720">720p HD</option>
             <option value="480">480p SD</option>
         </select>
     </div>
 
-    <a id="ext-link" class="fallback-btn" target="_blank">▶️ Открыть резервный веб-плеер (Все озвучки)</a>
-    <div class="episodes-grid" id="episodes-list"></div>
-    <div class="status" id="status-text">Запуск плеера...</div>
+    <div class="episodes-title">Серии:</div>
+    <div class="ep-grid" id="episodes"></div>
+    <div class="status" id="status">Инициализация...</div>
 
     <script>
-        const tg = window.Telegram.WebApp;
-        tg.expand();
+        const tg = window.Telegram?.WebApp;
+        if (tg) {
+            tg.expand();
+            tg.ready();
+        }
 
-        const params = new URLSearchParams(window.location.search);
-        const initialQuery = params.get('q') || 'Человек-бензопила';
-        const initialEn = params.get('en') || '';
+        const urlParams = new URLSearchParams(window.location.search);
+        const searchQuery = urlParams.get('q') || 'Человек-бензопила';
+        const isVipUser = urlParams.get('vip') === '1';
 
+        const videoBox = document.getElementById('video-box');
         const video = document.getElementById('video');
-        const titleEl = document.getElementById('anime-title');
-        const metaEl = document.getElementById('anime-meta');
-        const posterEl = document.getElementById('anime-poster');
-        const epListEl = document.getElementById('episodes-list');
-        const statusEl = document.getElementById('status-text');
-        const qualitySelect = document.getElementById('quality-select');
-        const extLink = document.getElementById('ext-link');
+        const paywall = document.getElementById('paywall');
+        const statusEl = document.getElementById('status');
+        const posterEl = document.getElementById('poster');
+        const titleEl = document.getElementById('title');
+        const metaEl = document.getElementById('meta');
+        const vipStatusEl = document.getElementById('vip-status');
 
-        let episodesData = [];
-        let currentEpIndex = 0;
+        if (isVipUser) {
+            vipStatusEl.textContent = "⭐ VIP Доступ Активен";
+            vipStatusEl.classList.add("vip-badge");
+        }
+
+        let episodes = [];
+        let currentIndex = 0;
         let hls = null;
 
-        function cleanTitle(str) {
-            return (str || '')
-                .replace(/\[.*?\]|\(.*?\)/g, '')
-                .replace(/[:\-—!?.]/g, ' ')
-                .replace(/\b(сезон|season|part|часть|тв|tv|финал|final)\s*\d*/gi, '')
-                .replace(/\s+/g, ' ')
-                .trim();
-        }
-
-        // Универсальный запрос с обходом блокировок через несколько зеркал
-        async function fetchJsonSafe(url) {
-            const urlsToTry = [
-                url,
-                `https://corsproxy.io/?${encodeURIComponent(url)}`,
-                `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`
-            ];
-            for (const target of urlsToTry) {
-                try {
-                    const res = await fetch(target);
-                    if (res.ok) {
-                        return await res.json();
-                    }
-                } catch (e) {}
-            }
-            return null;
-        }
-
-        async function searchRelease(q) {
-            if (!q) return null;
-            // Зеркало 1: anilibria.top API v1
-            const topUrl = `https://anilibria.top/api/v1/app/search/releases?query=${encodeURIComponent(q)}`;
-            const list = await fetchJsonSafe(topUrl);
-            if (Array.isArray(list) && list.length > 0) {
-                const fullUrl = `https://anilibria.top/api/v1/anime/releases/${list[0].id}`;
-                const fullData = await fetchJsonSafe(fullUrl);
-                if (fullData && Array.isArray(fullData.episodes) && fullData.episodes.length > 0) {
-                    return {
-                        title: (fullData.name && fullData.name.main) || q,
-                        poster: (fullData.poster && fullData.poster.src) ? `https://anilibria.top${fullData.poster.src}` : null,
-                        episodes: fullData.episodes.map((ep, i) => ({
-                            num: ep.ordinal || (i + 1),
-                            s1080: ep.hls_1080,
-                            s720: ep.hls_720,
-                            s480: ep.hls_480
-                        }))
-                    };
+        function toggleFullscreen() {
+            if (!document.fullscreenElement && !document.webkitFullscreenElement) {
+                if (videoBox.requestFullscreen) {
+                    videoBox.requestFullscreen();
+                } else if (videoBox.webkitRequestFullscreen) {
+                    videoBox.webkitRequestFullscreen();
+                } else if (video.webkitEnterFullscreen) {
+                    video.webkitEnterFullscreen();
+                }
+            } else {
+                if (document.exitFullscreen) {
+                    document.exitFullscreen();
+                } else if (document.webkitExitFullscreen) {
+                    document.webkitExitFullscreen();
                 }
             }
-
-            // Зеркало 2: api.anilibria.tv v3
-            const v3Url = `https://api.anilibria.tv/v3/title/search?search=${encodeURIComponent(q)}&limit=1`;
-            const v3Data = await fetchJsonSafe(v3Url);
-            if (v3Data && Array.isArray(v3Data.list) && v3Data.list.length > 0) {
-                const item = v3Data.list[0];
-                const host = (item.player && item.player.host) ? `https://${item.player.host}` : 'https://cache.libria.fun';
-                const listObj = (item.player && item.player.list) || {};
-                const eps = Object.values(listObj).map((ep, i) => ({
-                    num: ep.episode || (i + 1),
-                    s1080: ep.hls && ep.hls.fhd ? `${host}${ep.hls.fhd}` : null,
-                    s720: ep.hls && ep.hls.hd ? `${host}${ep.hls.hd}` : null,
-                    s480: ep.hls && ep.hls.sd ? `${host}${ep.hls.sd}` : null
-                })).filter(e => e.s1080 || e.s720 || e.s480);
-
-                if (eps.length > 0) {
-                    return {
-                        title: (item.names && item.names.ru) || q,
-                        poster: (item.posters && item.posters.small && item.posters.small.url)
-                            ? `https://anilibria.tv${item.posters.small.url}` : null,
-                        episodes: eps
-                    };
-                }
-            }
-            return null;
         }
 
-        async function loadAnime(query, enQuery = '') {
-            titleEl.textContent = query;
-            metaEl.textContent = "Ищем видеопоток на серверах...";
-            statusEl.textContent = `Поиск «${query}»...`;
-            epListEl.innerHTML = '';
-
-            extLink.href = `https://animego.org/search/all?q=${encodeURIComponent(query)}`;
-            extLink.style.display = 'block';
-
-            const candidates = [
-                query,
-                cleanTitle(query),
-                cleanTitle(enQuery),
-                cleanTitle(query).split(' ').slice(0, 2).join(' ')
-            ].filter(Boolean);
-
-            let result = null;
-            for (const cand of candidates) {
-                if (cand.length < 2) continue;
-                result = await searchRelease(cand);
-                if (result) break;
+        function openVipPurchase() {
+            if (tg) {
+                tg.sendData(JSON.stringify({ action: "buy_vip" }));
+                tg.close();
+            } else {
+                alert("Для покупки перейдите в Telegram-бота!");
             }
+        }
 
-            if (!result) {
-                metaEl.textContent = "Прямой HLS поток не найден";
-                statusEl.textContent = "Этого тайтла нет в прямой базе AniLibria (например, у Атаки Титанов другая студия озвучки). Нажми синюю кнопку выше — откроется плеер со всеми озвучками!";
+        async function fetchRelease(q) {
+            statusEl.textContent = `Поиск «${q}» в anilibria.top...`;
+            try {
+                const res = await fetch(`https://anilibria.top/api/v1/app/search/releases?query=${encodeURIComponent(q)}`);
+                const data = await res.json();
+                if (!Array.isArray(data) || data.length === 0) return null;
+
+                const full = await fetch(`https://anilibria.top/api/v1/anime/releases/${data[0].id}`);
+                return await full.json();
+            } catch (err) {
+                return null;
+            }
+        }
+
+        async function loadAnime(q) {
+            paywall.style.display = 'none';
+            const release = await fetchRelease(q);
+            if (!release || !release.episodes || release.episodes.length === 0) {
+                statusEl.textContent = "Аниме не найдено на anilibria.top. Попробуйте другой запрос.";
                 return;
             }
 
-            titleEl.textContent = result.title;
-            if (result.poster) posterEl.src = result.poster;
-            episodesData = result.episodes;
+            titleEl.textContent = release.name?.main || q;
+            metaEl.textContent = `Серий: ${release.episodes.length} • anilibria.top`;
+            if (release.poster?.src) {
+                posterEl.src = `https://anilibria.top${release.poster.src}`;
+            }
 
-            metaEl.textContent = `📺 Доступно серий: ${episodesData.length} • 1080p FHD`;
-            statusEl.textContent = `Выбери серию (1–${episodesData.length}):`;
+            episodes = release.episodes;
             renderEpisodes();
-            playEpisode(0);
+            selectEpisode(0);
         }
 
         function renderEpisodes() {
-            epListEl.innerHTML = '';
-            episodesData.forEach((ep, idx) => {
+            const container = document.getElementById('episodes');
+            container.innerHTML = '';
+
+            episodes.forEach((ep, i) => {
+                const isLocked = !isVipUser && i >= 2;
                 const btn = document.createElement('div');
-                btn.className = 'ep-btn' + (idx === currentEpIndex ? ' active' : '');
-                btn.textContent = `${ep.num} сер.`;
-                btn.onclick = () => playEpisode(idx);
-                epListEl.appendChild(btn);
+                btn.className = `ep-item ${isLocked ? 'locked' : ''} ${i === currentIndex ? 'active' : ''}`;
+                btn.innerHTML = `${ep.ordinal || (i + 1)} ${isLocked ? '🔒' : ''}`;
+                btn.onclick = () => selectEpisode(i);
+                container.appendChild(btn);
             });
         }
 
-        function playEpisode(index) {
-            currentEpIndex = index;
-            document.querySelectorAll('.ep-btn').forEach((b, idx) => {
-                b.classList.toggle('active', idx === index);
-            });
+        function selectEpisode(i) {
+            currentIndex = i;
+            renderEpisodes();
 
-            const ep = episodesData[index];
-            const q = qualitySelect.value;
-            const streamUrl = (q === '1080' ? ep.s1080 : q === '720' ? ep.s720 : ep.s480)
-                || ep.s1080 || ep.s720 || ep.s480;
-
-            if (!streamUrl) {
-                statusEl.textContent = "Поток для этой серии недоступен.";
+            if (!isVipUser && i >= 2) {
+                if (hls) hls.destroy();
+                video.pause();
+                video.src = "";
+                paywall.style.display = 'flex';
+                statusEl.textContent = "Оформите подписку для просмотра следующих серий.";
                 return;
             }
 
+            paywall.style.display = 'none';
+            const ep = episodes[i];
+            const q = document.getElementById('quality').value;
+            const stream = (q === '1080' ? ep.hls_1080 : q === '720' ? ep.hls_720 : ep.hls_480) 
+                         || ep.hls_1080 || ep.hls_720 || ep.hls_480;
+
+            if (!stream) {
+                statusEl.textContent = "Поток недоступен.";
+                return;
+            }
+
+            statusEl.textContent = `Воспроизведение: Серия ${ep.ordinal || (i + 1)}`;
             if (Hls.isSupported()) {
                 if (hls) hls.destroy();
                 hls = new Hls();
-                hls.loadSource(streamUrl);
+                hls.loadSource(stream);
                 hls.attachMedia(video);
                 hls.on(Hls.Events.MANIFEST_PARSED, () => video.play().catch(() => {}));
             } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
-                video.src = streamUrl;
+                video.src = stream;
                 video.play().catch(() => {});
             }
         }
 
-        function manualSearch() {
-            const val = document.getElementById('search-input').value.trim();
+        function switchQuality() {
+            if (episodes.length > 0) selectEpisode(currentIndex);
+        }
+
+        function searchNew() {
+            const val = document.getElementById('query').value.trim();
             if (val) loadAnime(val);
         }
 
-        qualitySelect.onchange = () => {
-            if (episodesData.length > 0) playEpisode(currentEpIndex);
-        };
-
-        loadAnime(initialQuery, initialEn);
+        loadAnime(searchQuery);
     </script>
 </body>
 </html>
