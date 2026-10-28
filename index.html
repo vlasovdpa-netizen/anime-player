@@ -13,44 +13,42 @@
         .shiki-card { display: flex; gap: 12px; background: #14141b; border: 1px solid #232330; padding: 10px; border-radius: 12px; margin-bottom: 12px; align-items: center; }
         .poster { width: 52px; height: 74px; border-radius: 8px; object-fit: cover; background: #222; flex-shrink: 0; }
         .info { flex: 1; overflow: hidden; }
-        .title { font-size: 16px; font-weight: 700; color: #fff; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .title { font-size: 15px; font-weight: 700; color: #fff; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
         .meta { font-size: 12px; color: #9a9ab0; margin-top: 4px; }
         .badge { display: inline-block; background: #262638; color: #70a1ff; padding: 2px 8px; border-radius: 6px; font-size: 11px; font-weight: 600; margin-top: 5px; }
 
         .video-box { width: 100%; aspect-ratio: 16/9; background: #000; border-radius: 14px; overflow: hidden; border: 1px solid #22222c; box-shadow: 0 8px 30px rgba(0,0,0,0.6); position: relative; }
-        video { width: 100%; height: 100%; outline: none; }
+        video, iframe { width: 100%; height: 100%; outline: none; border: none; }
 
         .controls-row { display: flex; gap: 8px; margin-top: 12px; }
         select, input { background: #16161d; color: #fff; border: 1px solid #2c2c3a; padding: 10px 12px; border-radius: 10px; font-size: 13px; outline: none; }
-        select { width: 130px; }
-        input { flex: 1; }
+        select { width: 125px; }
+        input { flex: 1; min-width: 0; }
         .search-btn { background: #5865F2; color: #fff; border: none; padding: 0 14px; border-radius: 10px; font-weight: 600; cursor: pointer; }
 
-        .episodes-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(62px, 1fr)); gap: 8px; margin-top: 14px; max-height: 210px; overflow-y: auto; padding-right: 4px; }
+        .episodes-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(62px, 1fr)); gap: 8px; margin-top: 14px; max-height: 200px; overflow-y: auto; padding-right: 4px; }
         .ep-btn { background: #16161d; border: 1px solid #262633; color: #ccc; padding: 10px 0; border-radius: 10px; text-align: center; font-size: 13px; font-weight: 600; cursor: pointer; transition: 0.15s; }
-        .ep-btn:hover { background: #22222e; }
         .ep-btn.active { background: #5865F2; color: #fff; border-color: #5865F2; }
-        .status { color: #888; font-size: 12px; margin-top: 12px; text-align: center; }
+        
+        .status { color: #9a9ab0; font-size: 12px; margin-top: 12px; text-align: center; line-height: 1.4; }
+        .fallback-btn { display: none; width: 100%; margin-top: 10px; background: #262638; color: #70a1ff; border: 1px solid #3a3a52; padding: 10px; border-radius: 10px; font-size: 13px; font-weight: 600; cursor: pointer; text-align: center; text-decoration: none; }
     </style>
 </head>
 <body>
 
-    <!-- Карточка из базы Shikimori -->
     <div class="shiki-card">
         <img id="anime-poster" class="poster" src="https://shikimori.one/favicons/favicon-96x96.png" alt="poster">
         <div class="info">
-            <div class="title" id="anime-title">Загрузка из Shikimori...</div>
-            <div class="meta" id="anime-meta">Поиск информации о тайтле...</div>
-            <div class="badge" id="quality-badge">База: Shikimori + HLS 1080p</div>
+            <div class="title" id="anime-title">Загрузка аниме...</div>
+            <div class="meta" id="anime-meta">Подключаемся к видеосерверу...</div>
+            <div class="badge" id="quality-badge">HLS 1080p • Прямой поток</div>
         </div>
     </div>
 
-    <!-- Видеоплеер -->
-    <div class="video-box">
+    <div class="video-box" id="player-container">
         <video id="video" controls playsinline></video>
     </div>
 
-    <!-- Панель быстрого поиска любого аниме и выбора качества -->
     <div class="controls-row">
         <input type="text" id="search-input" placeholder="Найти другое аниме...">
         <button class="search-btn" onclick="manualSearch()">Найти</button>
@@ -61,8 +59,9 @@
         </select>
     </div>
 
+    <a id="ext-link" class="fallback-btn" target="_blank">🌐 Открыть во внешнем мульти-плеере (Все озвучки)</a>
     <div class="episodes-grid" id="episodes-list"></div>
-    <div class="status" id="status-text">Подключаемся к базе данных...</div>
+    <div class="status" id="status-text">Ищем релиз...</div>
 
     <script>
         const tg = window.Telegram.WebApp;
@@ -70,6 +69,7 @@
 
         const params = new URLSearchParams(window.location.search);
         const initialQuery = params.get('q') || 'Человек-бензопила';
+        const initialEn = params.get('en') || '';
 
         const video = document.getElementById('video');
         const titleEl = document.getElementById('anime-title');
@@ -78,112 +78,95 @@
         const epListEl = document.getElementById('episodes-list');
         const statusEl = document.getElementById('status-text');
         const qualitySelect = document.getElementById('quality-select');
+        const extLink = document.getElementById('ext-link');
 
         let episodesData = [];
         let currentEpIndex = 0;
         let hls = null;
 
-        async function loadAnime(query) {
-            statusEl.textContent = `Ищем «${query}» в базе Shikimori...`;
-            epListEl.innerHTML = '';
+        // Очищает название от двоеточий, скобок и номеров сезона для точного поиска видео
+        function simplifyQuery(str) {
+            return str
+                .replace(/\[.*?\]|\(.*?\)/g, '')
+                .replace(/[:\-—!?.]/g, ' ')
+                .replace(/\b(сезон|season|part|часть|тв|tv)\s*\d*/gi, '')
+                .replace(/\s+/g, ' ')
+                .trim();
+        }
 
+        async function tryLibriaSearch(q) {
+            if (!q) return [];
             try {
-                // 1. Запрос в базу SHIKIMORI API за данными, рейтингом и постером
-                const shikiRes = await fetch(`https://shikimori.one/api/animes?search=${encodeURIComponent(query)}&limit=1`);
-                const shikiList = await shikiRes.json();
-
-                let searchName = query;
-                if (shikiList && shikiList.length > 0) {
-                    const shiki = shikiList[0];
-                    titleEl.textContent = shiki.russian || shiki.name;
-                    metaEl.textContent = `⭐ Рейтинг Shikimori: ${shiki.score} • Серий: ${shiki.episodes || shiki.episodes_aired || '?'}`;
-                    if (shiki.image && shiki.image.preview) {
-                        posterEl.src = `https://shikimori.one${shiki.image.preview}`;
-                    }
-                    searchName = shiki.russian || shiki.name;
-                } else {
-                    titleEl.textContent = query;
-                }
-
-                // 2. Запрос к новому рабочему API видеопотоков (anilibria.top / v1)
-                statusEl.textContent = "Загружаем видеопоток 1080p...";
-                const libRes = await fetch(`https://anilibria.top/api/v1/app/search/releases?query=${encodeURIComponent(searchName)}`);
-                const libList = await libRes.json();
-
-                if (!libList || libList.length === 0) {
-                    statusEl.textContent = "В базе Шикимори найдено, но прямой поток закрыт. Попробуй другой тайтл в поиске выше!";
-                    return;
-                }
-
-                // Получаем полный список серий релиза по его ID
-                const releaseId = libList[0].id;
-                const fullRes = await fetch(`https://anilibria.top/api/v1/anime/releases/${releaseId}`);
-                const fullData = await fullRes.json();
-
-                episodesData = fullData.episodes || [];
-                if (episodesData.length === 0) {
-                    statusEl.textContent = "Серии скоро появятся!";
-                    return;
-                }
-
-                statusEl.textContent = `Доступно серий: ${episodesData.length} • Выбери серию ниже`;
-                renderEpisodes();
-                playEpisode(0);
-
-            } catch (err) {
-                console.error(err);
-                statusEl.textContent = "Ошибка соединения с сервером видео. Если ты с телефона/ПК без прокси — проверь сеть.";
+                const res = await fetch(`https://anilibria.top/api/v1/app/search/releases?query=${encodeURIComponent(q)}`);
+                if (!res.ok) return [];
+                const data = await res.json();
+                return Array.isArray(data) ? data : [];
+            } catch (e) {
+                return [];
             }
         }
 
-        function renderEpisodes() {
+        async function loadAnime(query, enQuery = '') {
+            titleEl.textContent = query;
+            metaEl.textContent = "Поиск видеопотока 1080p...";
+            statusEl.textContent = `Ищем «${query}» на сервере...`;
             epListEl.innerHTML = '';
-            episodesData.forEach((ep, idx) => {
-                const btn = document.createElement('div');
-                btn.className = 'ep-btn' + (idx === currentEpIndex ? ' active' : '');
-                btn.textContent = `${ep.ordinal || (idx + 1)} сер.`;
-                btn.onclick = () => playEpisode(idx);
-                epListEl.appendChild(btn);
-            });
-        }
+            extLink.style.display = 'none';
 
-        function playEpisode(index) {
-            currentEpIndex = index;
-            document.querySelectorAll('.ep-btn').forEach((b, idx) => {
-                b.classList.toggle('active', idx === index);
-            });
+            // 1. Независимая попытка подтянуть инфу с Шикимори (если заблокировано — не ломает плеер!)
+            fetch(`https://shikimori.one/api/animes?search=${encodeURIComponent(query)}&limit=1`)
+                .then(r => r.ok ? r.json() : null)
+                .then(list => {
+                    if (list && list.length > 0) {
+                        const s = list[0];
+                        titleEl.textContent = s.russian || s.name || query;
+                        metaEl.textContent = `⭐ Шики: ${s.score || '8+'} • Серий: ${s.episodes || s.episodes_aired || '?'}`;
+                        if (s.image && s.image.preview) {
+                            posterEl.src = `https://shikimori.one${s.image.preview}`;
+                        }
+                    }
+                })
+                .catch(() => {}); // Игнорируем ошибку CORS Шикимори, чтобы видео грузилось дальше
 
-            const ep = episodesData[index];
-            const q = qualitySelect.value;
-            const streamUrl = ep[q] || ep.hls_1080 || ep.hls_720 || ep.hls_480;
+            // 2. Умный многоступенчатый поиск видеопотока
+            let libList = await tryLibriaSearch(query);
 
-            if (!streamUrl) {
-                statusEl.textContent = "Поток для этой серии недоступен.";
+            if (libList.length === 0) {
+                const cleanQ = simplifyQuery(query);
+                if (cleanQ && cleanQ !== query) {
+                    libList = await tryLibriaSearch(cleanQ);
+                }
+            }
+            if (libList.length === 0 && enQuery) {
+                libList = await tryLibriaSearch(simplifyQuery(enQuery));
+            }
+            if (libList.length === 0) {
+                // Пробуем по первым двум главным словам названия
+                const shortWords = simplifyQuery(query).split(' ').slice(0, 2).join(' ');
+                if (shortWords.length > 3) {
+                    libList = await tryLibriaSearch(shortWords);
+                }
+            }
+
+            // Показываем кнопку резервного мульти-плеера на случай, если нужна другая озвучка
+            extLink.href = `https://animego.org/search/all?q=${encodeURIComponent(query)}`;
+            extLink.style.display = 'block';
+
+            if (!libList || libList.length === 0) {
+                statusEl.textContent = "Этой анимешки нет в прямой базе HLS. Нажми синюю кнопку выше или вбей другой тайтл в поиск!";
                 return;
             }
 
-            if (Hls.isSupported()) {
-                if (hls) hls.destroy();
-                hls = new Hls();
-                hls.loadSource(streamUrl);
-                hls.attachMedia(video);
-                hls.on(Hls.Events.MANIFEST_PARSED, () => video.play().catch(() => {}));
-            } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
-                video.src = streamUrl;
-                video.play().catch(() => {});
-            }
-        }
+            try {
+                const release = libList[0];
+                const releaseId = release.id;
 
-        function manualSearch() {
-            const val = document.getElementById('search-input').value.trim();
-            if (val) loadAnime(val);
-        }
+                // Если Шикимори не дала постер — берем красивый постер напрямую из видео-базы
+                if (release.poster && release.poster.url) {
+                    posterEl.src = `https://anilibria.top${release.poster.url}`;
+                }
+                if (release.name && release.name.main) {
+                    titleEl.textContent = release.name.main;
+                }
 
-        qualitySelect.onchange = () => {
-            if (episodesData.length > 0) playEpisode(currentEpIndex);
-        };
-
-        loadAnime(initialQuery);
-    </script>
-</body>
-</html>
+                const fullRes
