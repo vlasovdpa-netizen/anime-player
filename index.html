@@ -3,80 +3,143 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Anime Player Pro</title>
+    <title>Anime Player AI + All Voices</title>
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
     <style>
         * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; }
-        body { background: #0c0d14; color: #f3f4f6; padding: 12px; user-select: none; }
+        body { background: #0b0c12; color: #f3f4f6; padding: 12px; user-select: none; }
         
-        .card { display: flex; gap: 10px; background: #151824; border: 1px solid #23283b; padding: 10px; border-radius: 12px; margin-bottom: 10px; align-items: center; }
+        .card { display: flex; gap: 10px; background: #141722; border: 1px solid #23283b; padding: 10px; border-radius: 12px; margin-bottom: 10px; align-items: center; }
         .poster { width: 48px; height: 68px; border-radius: 8px; object-fit: cover; background: #1c2030; flex-shrink: 0; }
         .info { flex: 1; overflow: hidden; }
         .title { font-size: 15px; font-weight: 700; color: #fff; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
         .meta { font-size: 11px; color: #94a3b8; margin-top: 3px; }
-        .badge { display: inline-block; background: #22293f; color: #38bdf8; padding: 2px 8px; border-radius: 6px; font-size: 10px; font-weight: 600; margin-top: 4px; }
-        .vip-badge { background: #f59e0b; color: #000; font-weight: 700; }
+        .badges { display: flex; gap: 6px; margin-top: 5px; flex-wrap: wrap; }
+        .badge { display: inline-block; background: #1e293b; color: #38bdf8; padding: 2px 7px; border-radius: 6px; font-size: 10px; font-weight: 600; }
+        .vip-badge { background: linear-gradient(135deg, #f59e0b, #d97706); color: #000; font-weight: 700; }
+        .ai-badge { background: linear-gradient(135deg, #8b5cf6, #ec4899); color: #fff; font-weight: 700; display: none; }
 
-        .video-wrapper { position: relative; width: 100%; aspect-ratio: 16/9; background: #000; border-radius: 12px; overflow: hidden; border: 1px solid #24293d; }
-        video { width: 100%; height: 100%; outline: none; }
+        .video-wrapper { position: relative; width: 100%; aspect-ratio: 16/9; background: #000; border-radius: 12px; overflow: hidden; border: 1px solid #24293d; box-shadow: 0 8px 25px rgba(0,0,0,0.65); }
+        video, iframe { width: 100%; height: 100%; outline: none; border: none; transition: filter 0.25s ease; }
+        #multi-iframe { display: none; }
 
-        .fs-btn { position: absolute; top: 8px; right: 8px; z-index: 20; background: rgba(15, 23, 42, 0.75); border: 1px solid #334155; color: #fff; border-radius: 8px; padding: 6px 10px; font-size: 12px; font-weight: 600; cursor: pointer; backdrop-filter: blur(4px); }
-        .fs-btn:hover { background: rgba(56, 189, 248, 0.85); color: #000; }
+        /* Контурный шейдер Anime4K (применяется и к HTML5 video, и к iframe со всеми озвучками!) */
+        .ai-upscale-active {
+            filter: url(#anime4k-shader) contrast(1.07) saturate(1.14);
+        }
 
-        .paywall-overlay { display: none; position: absolute; inset: 0; background: rgba(12, 13, 20, 0.95); z-index: 30; flex-direction: column; align-items: center; justify-content: center; text-align: center; padding: 16px; }
-        .paywall-overlay h3 { font-size: 17px; margin-bottom: 6px; color: #f59e0b; }
-        .paywall-overlay p { font-size: 12px; color: #cbd5e1; margin-bottom: 14px; max-width: 260px; line-height: 1.4; }
-        .buy-btn { background: linear-gradient(135deg, #f59e0b, #d97706); color: #000; border: none; font-weight: 700; padding: 10px 18px; border-radius: 10px; font-size: 13px; cursor: pointer; }
+        .top-overlay-btns { position: absolute; top: 8px; right: 8px; z-index: 25; display: flex; gap: 6px; }
+        .ov-btn { background: rgba(15, 23, 42, 0.82); border: 1px solid #334155; color: #fff; border-radius: 8px; padding: 5px 9px; font-size: 11px; font-weight: 600; cursor: pointer; backdrop-filter: blur(4px); }
+        .ov-btn.active-ai { background: linear-gradient(135deg, #8b5cf6, #ec4899); border-color: #ec4899; box-shadow: 0 0 12px rgba(236, 72, 153, 0.5); }
 
-        .controls { display: flex; gap: 8px; margin-top: 10px; }
-        input, select { background: #151824; color: #fff; border: 1px solid #23283b; padding: 8px 10px; border-radius: 8px; font-size: 12px; outline: none; }
-        input { flex: 1; }
-        select { width: 110px; }
-        .search-btn { background: #38bdf8; color: #000; border: none; padding: 0 14px; border-radius: 8px; font-weight: 700; font-size: 12px; cursor: pointer; }
+        .paywall-overlay { display: none; position: absolute; inset: 0; background: rgba(11, 12, 18, 0.96); z-index: 30; flex-direction: column; align-items: center; justify-content: center; text-align: center; padding: 16px; }
+        .paywall-overlay h3 { font-size: 16px; margin-bottom: 6px; color: #f59e0b; }
+        .paywall-overlay p { font-size: 12px; color: #cbd5e1; margin-bottom: 12px; max-width: 280px; line-height: 1.4; }
+        .paywall-btns { display: flex; gap: 8px; flex-wrap: wrap; justify-content: center; }
+        .buy-btn { background: linear-gradient(135deg, #f59e0b, #d97706); color: #000; border: none; font-weight: 700; padding: 9px 15px; border-radius: 9px; font-size: 12px; cursor: pointer; }
+        .back-720-btn { background: #1e293b; color: #cbd5e1; border: 1px solid #334155; font-weight: 600; padding: 9px 12px; border-radius: 9px; font-size: 12px; cursor: pointer; }
 
-        .episodes-title { font-size: 13px; font-weight: 600; margin: 12px 0 6px; color: #94a3b8; }
-        .ep-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(58px, 1fr)); gap: 6px; max-height: 170px; overflow-y: auto; }
-        .ep-item { background: #151824; border: 1px solid #23283b; color: #cbd5e1; padding: 8px 0; border-radius: 8px; text-align: center; font-size: 12px; font-weight: 600; cursor: pointer; position: relative; }
+        .voice-tabs { display: flex; gap: 6px; margin-top: 10px; overflow-x: auto; padding-bottom: 4px; }
+        .v-tab { background: #141722; border: 1px solid #23283b; color: #94a3b8; padding: 7px 11px; border-radius: 8px; font-size: 11px; font-weight: 600; white-space: nowrap; cursor: pointer; flex-shrink: 0; }
+        .v-tab.active { background: #262f45; color: #38bdf8; border-color: #38bdf8; }
+
+        .controls-row { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 8px; }
+        .search-row { display: flex; gap: 8px; margin-top: 8px; }
+        input, select { background: #141722; color: #fff; border: 1px solid #23283b; padding: 8px 10px; border-radius: 8px; font-size: 12px; outline: none; width: 100%; }
+        .search-btn { background: #38bdf8; color: #000; border: none; padding: 0 14px; border-radius: 8px; font-weight: 700; font-size: 12px; cursor: pointer; flex-shrink: 0; }
+
+        .episodes-title { font-size: 12px; font-weight: 600; margin: 12px 0 6px; color: #94a3b8; display: flex; justify-content: space-between; }
+        .ep-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(56px, 1fr)); gap: 6px; max-height: 155px; overflow-y: auto; }
+        .ep-item { background: #141722; border: 1px solid #23283b; color: #cbd5e1; padding: 8px 0; border-radius: 8px; text-align: center; font-size: 12px; font-weight: 600; cursor: pointer; }
         .ep-item.active { background: #38bdf8; color: #000; border-color: #38bdf8; }
-        .ep-item.locked { color: #64748b; background: #0f111a; border-style: dashed; }
-        .status { text-align: center; font-size: 11px; color: #64748b; margin-top: 10px; }
+        .status { text-align: center; font-size: 11px; color: #64748b; margin-top: 10px; line-height: 1.4; }
     </style>
 </head>
 <body>
+
+    <!-- Двухступенчатый SVG-шейдер Anime4K: сглаживание шума + контурная резкость линий рисовки -->
+    <svg style="position: absolute; width: 0; height: 0;" aria-hidden="true">
+        <filter id="anime4k-shader" color-interpolation-filters="sRGB">
+            <feConvolveMatrix order="3 3" preserveAlpha="true" kernelMatrix="0 -0.65 0 -0.65 3.6 -0.65 0 -0.65 0" result="sharpened"/>
+            <feComponentTransfer in="sharpened">
+                <feFuncR type="linear" slope="1.03" intercept="-0.015"/>
+                <feFuncG type="linear" slope="1.03" intercept="-0.015"/>
+                <feFuncB type="linear" slope="1.03" intercept="-0.015"/>
+            </feComponentTransfer>
+        </filter>
+    </svg>
 
     <div class="card">
         <img id="poster" class="poster" src="https://anilibria.top/favicon.ico" alt="poster">
         <div class="info">
             <div class="title" id="title">Загрузка тайтла...</div>
             <div class="meta" id="meta">Подключение к серверам...</div>
-            <div class="badge" id="vip-status">Бесплатный режим</div>
+            <div class="badges">
+                <div class="badge" id="vip-status">720p Free • Все серии</div>
+                <div class="badge ai-badge" id="ai-indicator">✨ AI Anime4K ON</div>
+            </div>
         </div>
     </div>
 
     <div class="video-wrapper" id="video-box">
-        <button class="fs-btn" onclick="toggleFullscreen()">⛶ Экран</button>
+        <div class="top-overlay-btns">
+            <button class="ov-btn" id="ai-btn" onclick="toggleAiUpscale()">✨ AI 4K</button>
+            <button class="ov-btn" onclick="toggleFullscreen()">⛶ Экран</button>
+        </div>
+
+        <!-- Ядро 1: Прямой HLS плеер (anilibria.top) -->
         <video id="video" controls playsinline></video>
+
+        <!-- Ядро 2: Встроенный мульти-плеер со всеми озвучками -->
+        <iframe id="multi-iframe" allowfullscreen allow="autoplay; fullscreen"></iframe>
         
         <div class="paywall-overlay" id="paywall">
-            <h3>🔒 Серия доступна по VIP</h3>
-            <p>Первые 2 серии открыты для всех. Оформи VIP-подписку в боте, чтобы смотреть все сезоны в 1080p!</p>
-            <button class="buy-btn" onclick="openVipPurchase()">Купить VIP за Telegram Stars</button>
+            <h3>👑 1080p FHD и ✨ AI Anime4K</h3>
+            <p>В бесплатном режиме доступно качество 720p. Разблокируй 1080p, нейро-улучшение рисовки Anime4K и VIP-режим навсегда за 5 ⭐️!</p>
+            <div class="paywall-btns">
+                <button class="buy-btn" onclick="openVipPurchase()">Открыть за 5 ⭐️</button>
+                <button class="back-720-btn" onclick="fallbackTo720()">Остаться на 720p</button>
+            </div>
         </div>
     </div>
 
-    <div class="controls">
-        <input type="text" id="query" placeholder="Найти другое аниме...">
-        <button class="search-btn" onclick="searchNew()">Найти</button>
+    <!-- Быстрые кнопки выбора студий озвучки прямо под видео -->
+    <div class="voice-tabs">
+        <div class="v-tab active" id="tab-libria" onclick="selectVoiceEngine('anilibria', this)">🎙 AniLibria (HLS)</div>
+        <div class="v-tab" onclick="selectVoiceEngine('kodik', this)">🎙 Студийная Банда</div>
+        <div class="v-tab" onclick="selectVoiceEngine('kodik', this)">🎙 AniDub</div>
+        <div class="v-tab" onclick="selectVoiceEngine('kodik', this)">🎙 SHIZA / Jam</div>
+        <div class="v-tab" onclick="selectVoiceEngine('kodik', this)">💬 Субтитры / Все озвучки</div>
+    </div>
+
+    <div class="controls-row">
         <select id="quality" onchange="switchQuality()">
-            <option value="1080">1080p FHD</option>
-            <option value="720">720p HD</option>
-            <option value="480">480p SD</option>
+            <option value="720" selected>📺 720p HD (Бесплатно)</option>
+            <option value="480">📺 480p SD (Бесплатно)</option>
+            <option value="1080" id="opt-1080">👑 1080p FHD 🔒</option>
+            <option value="ai4k" id="opt-ai">✨ 1080p + AI 4K 🔒</option>
+        </select>
+
+        <select id="shader-preset" onchange="changeShaderStrength()">
+            <option value="mid">🎨 Шейдер: Чёткий контур</option>
+            <option value="max">🔥 Шейдер: Ультра 4K</option>
         </select>
     </div>
 
-    <div class="episodes-title">Серии:</div>
-    <div class="ep-grid" id="episodes"></div>
+    <div class="search-row">
+        <input type="text" id="query" placeholder="Найти другое аниме...">
+        <button class="search-btn" onclick="searchNew()">Найти</button>
+    </div>
+
+    <div id="hls-episodes-block">
+        <div class="episodes-title">
+            <span>Серии (AniLibria):</span>
+            <span id="ep-counter">0 сер.</span>
+        </div>
+        <div class="ep-grid" id="episodes"></div>
+    </div>
+
     <div class="status" id="status">Инициализация...</div>
 
     <script>
@@ -87,42 +150,79 @@
         }
 
         const urlParams = new URLSearchParams(window.location.search);
-        const searchQuery = urlParams.get('q') || 'Человек-бензопила';
+        let searchQuery = urlParams.get('q') || 'Человек-бензопила';
+        let shikiId = (urlParams.get('id') || '').replace('lib_', '');
         const isVipUser = urlParams.get('vip') === '1';
 
         const videoBox = document.getElementById('video-box');
         const video = document.getElementById('video');
+        const multiIframe = document.getElementById('multi-iframe');
         const paywall = document.getElementById('paywall');
         const statusEl = document.getElementById('status');
         const posterEl = document.getElementById('poster');
         const titleEl = document.getElementById('title');
         const metaEl = document.getElementById('meta');
         const vipStatusEl = document.getElementById('vip-status');
-
-        if (isVipUser) {
-            vipStatusEl.textContent = "⭐ VIP Доступ Активен";
-            vipStatusEl.classList.add("vip-badge");
-        }
+        const aiIndicator = document.getElementById('ai-indicator');
+        const aiBtn = document.getElementById('ai-btn');
+        const qualitySelect = document.getElementById('quality');
+        const hlsBlock = document.getElementById('hls-episodes-block');
 
         let episodes = [];
         let currentIndex = 0;
         let hls = null;
+        let aiEnabled = false;
+        let currentEngine = 'anilibria';
+
+        if (isVipUser) {
+            vipStatusEl.textContent = "👑 VIP • 1080p + AI 4K";
+            vipStatusEl.classList.add("vip-badge");
+            document.getElementById('opt-1080').textContent = "👑 1080p FHD";
+            document.getElementById('opt-ai').textContent = "✨ 1080p + AI 4K";
+            qualitySelect.value = "1080";
+        }
 
         function toggleFullscreen() {
             if (!document.fullscreenElement && !document.webkitFullscreenElement) {
-                if (videoBox.requestFullscreen) {
-                    videoBox.requestFullscreen();
-                } else if (videoBox.webkitRequestFullscreen) {
-                    videoBox.webkitRequestFullscreen();
-                } else if (video.webkitEnterFullscreen) {
-                    video.webkitEnterFullscreen();
-                }
+                if (videoBox.requestFullscreen) videoBox.requestFullscreen();
+                else if (videoBox.webkitRequestFullscreen) videoBox.webkitRequestFullscreen();
+                else if (video.webkitEnterFullscreen) video.webkitEnterFullscreen();
             } else {
-                if (document.exitFullscreen) {
-                    document.exitFullscreen();
-                } else if (document.webkitExitFullscreen) {
-                    document.webkitExitFullscreen();
-                }
+                if (document.exitFullscreen) document.exitFullscreen();
+                else if (document.webkitExitFullscreen) document.webkitExitFullscreen();
+            }
+        }
+
+        function changeShaderStrength() {
+            const mode = document.getElementById('shader-preset').value;
+            const matrix = document.querySelector('#anime4k-shader feConvolveMatrix');
+            if (mode === 'max') {
+                matrix.setAttribute('kernelMatrix', '0 -0.9 0 -0.9 4.6 -0.9 0 -0.9 0');
+            } else {
+                matrix.setAttribute('kernelMatrix', '0 -0.65 0 -0.65 3.6 -0.65 0 -0.65 0');
+            }
+        }
+
+        function toggleAiUpscale() {
+            if (!isVipUser) {
+                paywall.style.display = 'flex';
+                return;
+            }
+            aiEnabled = !aiEnabled;
+            video.classList.toggle('ai-upscale-active', aiEnabled);
+            multiIframe.classList.toggle('ai-upscale-active', aiEnabled);
+            aiBtn.classList.toggle('active-ai', aiEnabled);
+            aiIndicator.style.display = aiEnabled ? 'inline-block' : 'none';
+            statusEl.textContent = aiEnabled 
+                ? "✨ Шейдер Anime4K включен! Линии рисовки и контраст усилены в реальном времени." 
+                : "Обычный режим без нейро-фильтра";
+        }
+
+        function fallbackTo720() {
+            paywall.style.display = 'none';
+            qualitySelect.value = '720';
+            if (currentEngine === 'anilibria' && episodes.length > 0) {
+                selectEpisode(currentIndex);
             }
         }
 
@@ -131,15 +231,74 @@
                 tg.sendData(JSON.stringify({ action: "buy_vip" }));
                 tg.close();
             } else {
-                alert("Для покупки перейдите в Telegram-бота!");
+                alert("Перейдите в Telegram-бота, чтобы разблокировать VIP за 5 ⭐️!");
             }
         }
 
+        // Переключение между прямым HLS (AniLibria) и встроенным Мульти-плеером со всеми озвучками
+        async function selectVoiceEngine(engine, tabEl) {
+            document.querySelectorAll('.v-tab').forEach(t => t.classList.remove('active'));
+            if (tabEl) tabEl.classList.add('active');
+            currentEngine = engine;
+
+            if (engine === 'anilibria') {
+                multiIframe.style.display = 'none';
+                multiIframe.src = '';
+                video.style.display = 'block';
+                hlsBlock.style.display = 'block';
+                if (episodes.length > 0) {
+                    selectEpisode(currentIndex);
+                } else {
+                    loadAnime(searchQuery);
+                }
+                return;
+            }
+
+            // Останавливаем HLS и включаем встроенный плеер всех озвучек внутри окна
+            if (hls) hls.destroy();
+            video.pause();
+            video.style.display = 'none';
+            hlsBlock.style.display = 'none';
+            multiIframe.style.display = 'block';
+            statusEl.textContent = "Загружаем мульти-плеер со всеми студиями озвучки...";
+
+            // Если нет Shikimori ID, быстро узнаем его по названию
+            if (!shikiId) {
+                try {
+                    const r = await fetch(`https://shikimori.one/api/animes?search=${encodeURIComponent(searchQuery)}&limit=1`);
+                    const d = await r.json();
+                    if (Array.isArray(d) && d.length > 0) shikiId = d[0].id;
+                } catch (e) {}
+            }
+
+            // Открываем мульти-плеер с выбором Студийной Банды, AniDub, SHIZA, Субтитров прямо в iframe
+            if (shikiId) {
+                multiIframe.src = `https://kodik.cc/find-player?shikimoriID=${encodeURIComponent(shikiId)}`;
+                statusEl.textContent = "🎙 Выбери нужную озвучку и серию в верхнем левом углу плеера! Фильтр ✨ AI 4K работает поверх видео.";
+            } else {
+                multiIframe.src = `https://kodik.cc/find-player?title=${encodeURIComponent(searchQuery)}`;
+                statusEl.textContent = "🎙 Мульти-плеер всех озвучек активен!";
+            }
+        }
+
+        function cleanTitle(str) {
+            return (str || '')
+                .replace(/\[.*?\]|\(.*?\)/g, '')
+                .replace(/[:\-—!?.]/g, ' ')
+                .replace(/\s+/g, ' ')
+                .trim();
+        }
+
         async function fetchRelease(q) {
-            statusEl.textContent = `Поиск «${q}» в anilibria.top...`;
+            statusEl.textContent = `Поиск «${q}» в базе anilibria.top...`;
             try {
-                const res = await fetch(`https://anilibria.top/api/v1/app/search/releases?query=${encodeURIComponent(q)}`);
-                const data = await res.json();
+                let res = await fetch(`https://anilibria.top/api/v1/app/search/releases?query=${encodeURIComponent(q)}`);
+                let data = await res.json();
+                if (!Array.isArray(data) || data.length === 0) {
+                    const cleaned = cleanTitle(q).split(' ').slice(0, 2).join(' ');
+                    res = await fetch(`https://anilibria.top/api/v1/app/search/releases?query=${encodeURIComponent(cleaned)}`);
+                    data = await res.json();
+                }
                 if (!Array.isArray(data) || data.length === 0) return null;
 
                 const full = await fetch(`https://anilibria.top/api/v1/anime/releases/${data[0].id}`);
@@ -150,15 +309,22 @@
         }
 
         async function loadAnime(q) {
+            searchQuery = q;
             paywall.style.display = 'none';
+            titleEl.textContent = q;
+
             const release = await fetchRelease(q);
             if (!release || !release.episodes || release.episodes.length === 0) {
-                statusEl.textContent = "Аниме не найдено на anilibria.top. Попробуйте другой запрос.";
+                metaEl.textContent = "В базе AniLibria не найдено • Включаем мульти-озвучку";
+                // Автоматически переключаем на вкладку всех озвучек, если тайтла нет на Анилибрии!
+                const multiTab = document.querySelectorAll('.v-tab')[1];
+                selectVoiceEngine('kodik', multiTab);
                 return;
             }
 
             titleEl.textContent = release.name?.main || q;
-            metaEl.textContent = `Серий: ${release.episodes.length} • anilibria.top`;
+            metaEl.textContent = `Серий: ${release.episodes.length} • Выбери озвучку ниже`;
+            document.getElementById('ep-counter').textContent = `${release.episodes.length} сер.`;
             if (release.poster?.src) {
                 posterEl.src = `https://anilibria.top${release.poster.src}`;
             }
@@ -173,10 +339,9 @@
             container.innerHTML = '';
 
             episodes.forEach((ep, i) => {
-                const isLocked = !isVipUser && i >= 2;
                 const btn = document.createElement('div');
-                btn.className = `ep-item ${isLocked ? 'locked' : ''} ${i === currentIndex ? 'active' : ''}`;
-                btn.innerHTML = `${ep.ordinal || (i + 1)} ${isLocked ? '🔒' : ''}`;
+                btn.className = `ep-item ${i === currentIndex ? 'active' : ''}`;
+                btn.textContent = `${ep.ordinal || (i + 1)}`;
                 btn.onclick = () => selectEpisode(i);
                 container.appendChild(btn);
             });
@@ -186,27 +351,35 @@
             currentIndex = i;
             renderEpisodes();
 
-            if (!isVipUser && i >= 2) {
-                if (hls) hls.destroy();
+            const q = qualitySelect.value;
+            if (!isVipUser && (q === '1080' || q === 'ai4k')) {
                 video.pause();
-                video.src = "";
                 paywall.style.display = 'flex';
-                statusEl.textContent = "Оформите подписку для просмотра следующих серий.";
+                statusEl.textContent = "Качество 1080p и AI 4K доступно по VIP (5 ⭐️). В 720p все серии бесплатны!";
                 return;
             }
 
             paywall.style.display = 'none';
+            if (q === 'ai4k' && isVipUser && !aiEnabled) {
+                toggleAiUpscale();
+            }
+
             const ep = episodes[i];
-            const q = document.getElementById('quality').value;
-            const stream = (q === '1080' ? ep.hls_1080 : q === '720' ? ep.hls_720 : ep.hls_480) 
-                         || ep.hls_1080 || ep.hls_720 || ep.hls_480;
+            let stream = ep.hls_720 || ep.hls_480 || ep.hls_1080;
+            if (q === '1080' || q === 'ai4k') {
+                stream = ep.hls_1080 || ep.hls_720;
+            } else if (q === '480') {
+                stream = ep.hls_480 || ep.hls_720;
+            }
 
             if (!stream) {
-                statusEl.textContent = "Поток недоступен.";
+                statusEl.textContent = "Видеопоток для этой серии недоступен.";
                 return;
             }
 
-            statusEl.textContent = `Воспроизведение: Серия ${ep.ordinal || (i + 1)}`;
+            const modeLabel = q === 'ai4k' ? '1080p + AI 4K' : `${q}p`;
+            statusEl.textContent = `Играет: Серия ${ep.ordinal || (i + 1)} (${modeLabel} • AniLibria)`;
+
             if (Hls.isSupported()) {
                 if (hls) hls.destroy();
                 hls = new Hls();
@@ -220,12 +393,30 @@
         }
 
         function switchQuality() {
-            if (episodes.length > 0) selectEpisode(currentIndex);
+            const q = qualitySelect.value;
+            if (!isVipUser && (q === '1080' || q === 'ai4k')) {
+                paywall.style.display = 'flex';
+                return;
+            }
+            if (currentEngine === 'anilibria' && episodes.length > 0) {
+                selectEpisode(currentIndex);
+            } else if (q === 'ai4k' && isVipUser && !aiEnabled) {
+                toggleAiUpscale();
+            }
         }
 
         function searchNew() {
             const val = document.getElementById('query').value.trim();
-            if (val) loadAnime(val);
+            if (val) {
+                shikiId = '';
+                document.querySelectorAll('.v-tab').forEach(t => t.classList.remove('active'));
+                document.getElementById('tab-libria').classList.add('active');
+                currentEngine = 'anilibria';
+                multiIframe.style.display = 'none';
+                video.style.display = 'block';
+                hlsBlock.style.display = 'block';
+                loadAnime(val);
+            }
         }
 
         loadAnime(searchQuery);
