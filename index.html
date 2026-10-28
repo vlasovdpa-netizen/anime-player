@@ -3,15 +3,34 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Anime Player AI + All Voices</title>
+    <title>Anime Player AI Cinema</title>
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
     <style>
         * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; }
-        body { background: #0b0c12; color: #f3f4f6; padding: 12px; user-select: none; }
+        body { background: #08090d; color: #f3f4f6; padding: 10px; user-select: none; overflow-x: hidden; }
         
-        .card { display: flex; gap: 10px; background: #141722; border: 1px solid #23283b; padding: 10px; border-radius: 12px; margin-bottom: 10px; align-items: center; }
-        .poster { width: 48px; height: 68px; border-radius: 8px; object-fit: cover; background: #1c2030; flex-shrink: 0; }
+        /* Режим Кинотеатра (скрывает всё лишнее вокруг видео) */
+        body.cinema-mode .card,
+        body.cinema-mode .voice-tabs,
+        body.cinema-mode .mirror-bar,
+        body.cinema-mode .controls-row,
+        body.cinema-mode .search-row,
+        body.cinema-mode #hls-episodes-block,
+        body.cinema-mode .status {
+            display: none !important;
+        }
+        body.cinema-mode { padding: 0; background: #000; }
+        body.cinema-mode .video-wrapper {
+            width: 100vw;
+            height: 100vh;
+            border-radius: 0;
+            border: none;
+            aspect-ratio: auto;
+        }
+
+        .card { display: flex; gap: 10px; background: #12151f; border: 1px solid #1f2436; padding: 10px; border-radius: 12px; margin-bottom: 10px; align-items: center; }
+        .poster { width: 46px; height: 64px; border-radius: 8px; object-fit: cover; background: #1c2030; flex-shrink: 0; }
         .info { flex: 1; overflow: hidden; }
         .title { font-size: 15px; font-weight: 700; color: #fff; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
         .meta { font-size: 11px; color: #94a3b8; margin-top: 3px; }
@@ -20,19 +39,21 @@
         .vip-badge { background: linear-gradient(135deg, #f59e0b, #d97706); color: #000; font-weight: 700; }
         .ai-badge { background: linear-gradient(135deg, #8b5cf6, #ec4899); color: #fff; font-weight: 700; display: none; }
 
-        .video-wrapper { position: relative; width: 100%; aspect-ratio: 16/9; background: #000; border-radius: 12px; overflow: hidden; border: 1px solid #24293d; box-shadow: 0 8px 25px rgba(0,0,0,0.65); }
-        video, iframe { width: 100%; height: 100%; outline: none; border: none; transition: filter 0.25s ease; }
+        .video-wrapper { position: relative; width: 100%; aspect-ratio: 16/9; background: #000; border-radius: 12px; overflow: hidden; border: 1px solid #24293d; box-shadow: 0 8px 30px rgba(0,0,0,0.8); }
+        video, iframe { width: 100%; height: 100%; outline: none; border: none; transition: filter 0.25s ease; background: #000; }
         #multi-iframe { display: none; }
 
         .ai-upscale-active {
             filter: url(#anime4k-shader) contrast(1.07) saturate(1.14);
         }
 
-        .top-overlay-btns { position: absolute; top: 8px; right: 8px; z-index: 25; display: flex; gap: 6px; }
-        .ov-btn { background: rgba(15, 23, 42, 0.82); border: 1px solid #334155; color: #fff; border-radius: 8px; padding: 5px 9px; font-size: 11px; font-weight: 600; cursor: pointer; backdrop-filter: blur(4px); }
-        .ov-btn.active-ai { background: linear-gradient(135deg, #8b5cf6, #ec4899); border-color: #ec4899; box-shadow: 0 0 12px rgba(236, 72, 153, 0.5); }
+        .top-overlay-btns { position: absolute; top: 8px; right: 8px; z-index: 25; display: flex; gap: 6px; flex-wrap: wrap; justify-content: flex-end; opacity: 0.25; transition: opacity 0.2s; }
+        .video-wrapper:hover .top-overlay-btns, .top-overlay-btns:hover { opacity: 1; }
+        .ov-btn { background: rgba(10, 12, 20, 0.88); border: 1px solid #334155; color: #fff; border-radius: 8px; padding: 5px 9px; font-size: 11px; font-weight: 600; cursor: pointer; backdrop-filter: blur(4px); }
+        .ov-btn:hover { border-color: #38bdf8; }
+        .ov-btn.active-ai { background: linear-gradient(135deg, #8b5cf6, #ec4899); border-color: #ec4899; opacity: 1; }
 
-        .paywall-overlay { display: none; position: absolute; inset: 0; background: rgba(11, 12, 18, 0.96); z-index: 30; flex-direction: column; align-items: center; justify-content: center; text-align: center; padding: 16px; }
+        .paywall-overlay { display: none; position: absolute; inset: 0; background: rgba(8, 9, 13, 0.96); z-index: 30; flex-direction: column; align-items: center; justify-content: center; text-align: center; padding: 16px; }
         .paywall-overlay h3 { font-size: 16px; margin-bottom: 6px; color: #f59e0b; }
         .paywall-overlay p { font-size: 12px; color: #cbd5e1; margin-bottom: 12px; max-width: 280px; line-height: 1.4; }
         .paywall-btns { display: flex; gap: 8px; flex-wrap: wrap; justify-content: center; }
@@ -40,19 +61,25 @@
         .back-720-btn { background: #1e293b; color: #cbd5e1; border: 1px solid #334155; font-weight: 600; padding: 9px 12px; border-radius: 9px; font-size: 12px; cursor: pointer; }
 
         .voice-tabs { display: flex; gap: 6px; margin-top: 10px; overflow-x: auto; padding-bottom: 4px; }
-        .v-tab { background: #141722; border: 1px solid #23283b; color: #94a3b8; padding: 7px 11px; border-radius: 8px; font-size: 11px; font-weight: 600; white-space: nowrap; cursor: pointer; flex-shrink: 0; }
-        .v-tab.active { background: #262f45; color: #38bdf8; border-color: #38bdf8; }
+        .v-tab { background: #12151f; border: 1px solid #1f2436; color: #94a3b8; padding: 7px 11px; border-radius: 8px; font-size: 11px; font-weight: 600; white-space: nowrap; cursor: pointer; flex-shrink: 0; }
+        .v-tab.active { background: #1e293b; color: #38bdf8; border-color: #38bdf8; }
+
+        /* Панель смены зеркал для мульти-озвучки, если одно заблокировано */
+        .mirror-bar { display: none; gap: 6px; margin-top: 6px; align-items: center; background: #12151f; padding: 6px 8px; border-radius: 8px; border: 1px solid #1f2436; overflow-x: auto; }
+        .mirror-label { font-size: 11px; color: #94a3b8; white-space: nowrap; }
+        .m-btn { background: #1e293b; color: #cbd5e1; border: 1px solid #334155; padding: 4px 8px; border-radius: 6px; font-size: 10px; font-weight: 600; cursor: pointer; white-space: nowrap; }
+        .m-btn.active { background: #38bdf8; color: #000; border-color: #38bdf8; }
 
         .controls-row { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 8px; }
         .search-row { display: flex; gap: 8px; margin-top: 8px; }
-        input, select { background: #141722; color: #fff; border: 1px solid #23283b; padding: 8px 10px; border-radius: 8px; font-size: 12px; outline: none; width: 100%; }
+        input, select { background: #12151f; color: #fff; border: 1px solid #1f2436; padding: 8px 10px; border-radius: 8px; font-size: 12px; outline: none; width: 100%; }
         .search-btn { background: #38bdf8; color: #000; border: none; padding: 0 14px; border-radius: 8px; font-weight: 700; font-size: 12px; cursor: pointer; flex-shrink: 0; }
 
-        .episodes-title { font-size: 12px; font-weight: 600; margin: 12px 0 6px; color: #94a3b8; display: flex; justify-content: space-between; }
-        .ep-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(56px, 1fr)); gap: 6px; max-height: 155px; overflow-y: auto; }
-        .ep-item { background: #141722; border: 1px solid #23283b; color: #cbd5e1; padding: 8px 0; border-radius: 8px; text-align: center; font-size: 12px; font-weight: 600; cursor: pointer; }
+        .episodes-title { font-size: 12px; font-weight: 600; margin: 10px 0 6px; color: #94a3b8; display: flex; justify-content: space-between; }
+        .ep-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(54px, 1fr)); gap: 6px; max-height: 150px; overflow-y: auto; }
+        .ep-item { background: #12151f; border: 1px solid #1f2436; color: #cbd5e1; padding: 8px 0; border-radius: 8px; text-align: center; font-size: 12px; font-weight: 600; cursor: pointer; }
         .ep-item.active { background: #38bdf8; color: #000; border-color: #38bdf8; }
-        .status { text-align: center; font-size: 11px; color: #64748b; margin-top: 10px; line-height: 1.4; }
+        .status { text-align: center; font-size: 11px; color: #64748b; margin-top: 8px; line-height: 1.4; }
     </style>
 </head>
 <body>
@@ -74,7 +101,7 @@
             <div class="title" id="title">Загрузка тайтла...</div>
             <div class="meta" id="meta">Подключение к серверам...</div>
             <div class="badges">
-                <div class="badge" id="vip-status">720p Бесплатно • Все серии открыты</div>
+                <div class="badge" id="vip-status">720p Бесплатно • Все серии</div>
                 <div class="badge ai-badge" id="ai-indicator">✨ AI Anime4K ON</div>
             </div>
         </div>
@@ -83,7 +110,9 @@
     <div class="video-wrapper" id="video-box">
         <div class="top-overlay-btns">
             <button class="ov-btn" id="ai-btn" onclick="toggleAiUpscale()">✨ AI 4K</button>
-            <button class="ov-btn" onclick="toggleFullscreen()">⛶ Экран</button>
+            <button class="ov-btn" onclick="toggleCinemaMode()">🍿 Кино-режим</button>
+            <button class="ov-btn" onclick="openInBrowser()">🖥 Без рамок (ПК)</button>
+            <button class="ov-btn" onclick="toggleFullscreen()">⛶ Полный</button>
         </div>
 
         <video id="video" controls playsinline></video>
@@ -99,13 +128,22 @@
         </div>
     </div>
 
-    <!-- Вкладки выбора любой озвучки -->
+    <!-- Вкладки выбора озвучки -->
     <div class="voice-tabs">
-        <div class="v-tab active" id="tab-libria" onclick="selectVoiceEngine('anilibria', this)">🎙 AniLibria (HLS)</div>
-        <div class="v-tab" onclick="selectVoiceEngine('kodik', this)">🎙 Студийная Банда</div>
-        <div class="v-tab" onclick="selectVoiceEngine('kodik', this)">🎙 AniDub</div>
-        <div class="v-tab" onclick="selectVoiceEngine('kodik', this)">🎙 SHIZA / Jam</div>
-        <div class="v-tab" onclick="selectVoiceEngine('kodik', this)">💬 Субтитры / Все озвучки</div>
+        <div class="v-tab active" id="tab-libria" onclick="selectVoiceEngine('anilibria', this)">🎙 AniLibria (Прямой HLS)</div>
+        <div class="v-tab" onclick="selectVoiceEngine('multi', this)">🎙 Студийная Банда</div>
+        <div class="v-tab" onclick="selectVoiceEngine('multi', this)">🎙 AniDub</div>
+        <div class="v-tab" onclick="selectVoiceEngine('multi', this)">🎙 SHIZA / Jam</div>
+        <div class="v-tab" onclick="selectVoiceEngine('multi', this)">💬 Субтитры / Все озвучки</div>
+    </div>
+
+    <!-- Переключатель рабочих зеркал, если Кодик заблокирован провайдером -->
+    <div class="mirror-bar" id="mirror-bar">
+        <span class="mirror-label">Зеркало озвучек:</span>
+        <button class="m-btn active" onclick="switchMirror(0, this)">Зеркало 1 (Aniqit)</button>
+        <button class="m-btn" onclick="switchMirror(1, this)">Зеркало 2 (Info)</button>
+        <button class="m-btn" onclick="switchMirror(2, this)">Зеркало 3 (Biz)</button>
+        <button class="m-btn" onclick="openExternalMulti()">🌐 Открыть в браузере</button>
     </div>
 
     <div class="controls-row">
@@ -129,7 +167,7 @@
 
     <div id="hls-episodes-block">
         <div class="episodes-title">
-            <span>Все серии доступны бесплатно:</span>
+            <span>Серии (Бесплатно):</span>
             <span id="ep-counter">0 сер.</span>
         </div>
         <div class="ep-grid" id="episodes"></div>
@@ -142,6 +180,12 @@
         if (tg) {
             tg.expand();
             tg.ready();
+            // Красим белые рамки окна Телеграма в тёмный цвет под плеер!
+            try {
+                if (tg.setHeaderColor) tg.setHeaderColor('#08090d');
+                if (tg.setBackgroundColor) tg.setBackgroundColor('#08090d');
+                if (tg.setBottomBarColor) tg.setBottomBarColor('#08090d');
+            } catch (e) {}
         }
 
         const urlParams = new URLSearchParams(window.location.search);
@@ -152,6 +196,7 @@
         const videoBox = document.getElementById('video-box');
         const video = document.getElementById('video');
         const multiIframe = document.getElementById('multi-iframe');
+        const mirrorBar = document.getElementById('mirror-bar');
         const paywall = document.getElementById('paywall');
         const statusEl = document.getElementById('status');
         const posterEl = document.getElementById('poster');
@@ -168,6 +213,14 @@
         let hls = null;
         let aiEnabled = false;
         let currentEngine = 'anilibria';
+        let currentMirrorIndex = 0;
+
+        // Рабочие домены-зеркала мульти-плеера (в обход заблокированного kodik.cc)
+        const KODIK_MIRRORS = [
+            'https://aniqit.com/find-player',
+            'https://kodik.info/find-player',
+            'https://kodik.biz/find-player'
+        ];
 
         if (isVipUser) {
             vipStatusEl.textContent = "👑 VIP • 1080p + AI 4K";
@@ -177,7 +230,28 @@
             qualitySelect.value = "1080";
         }
 
+        // Растягивает видео на всё окно внутри самого приложения
+        function toggleCinemaMode() {
+            document.body.classList.toggle('cinema-mode');
+            if (tg && tg.requestFullscreen && document.body.classList.contains('cinema-mode')) {
+                try { tg.requestFullscreen(); } catch (e) {}
+            }
+        }
+
+        // Открывает этот же плеер в обычном браузере ПК (Chrome/Edge) на 100% экрана без рамок Телеграма!
+        function openInBrowser() {
+            const currentUrl = window.location.href;
+            if (tg && tg.openLink) {
+                tg.openLink(currentUrl);
+            } else {
+                window.open(currentUrl, '_blank');
+            }
+        }
+
         function toggleFullscreen() {
+            if (tg && tg.requestFullscreen && !tg.isFullscreen) {
+                try { tg.requestFullscreen(); } catch (e) {}
+            }
             if (!document.fullscreenElement && !document.webkitFullscreenElement) {
                 if (videoBox.requestFullscreen) videoBox.requestFullscreen();
                 else if (videoBox.webkitRequestFullscreen) videoBox.webkitRequestFullscreen();
@@ -230,6 +304,28 @@
             }
         }
 
+        function loadMirrorIframe() {
+            const base = KODIK_MIRRORS[currentMirrorIndex];
+            const param = shikiId 
+                ? `shikimoriID=${encodeURIComponent(shikiId)}` 
+                : `title=${encodeURIComponent(searchQuery)}`;
+            multiIframe.src = `${base}?${param}`;
+            statusEl.textContent = `🎙 Выбрано Зеркало ${currentMirrorIndex + 1}. Если провайдер блокирует плеер — нажми другое зеркало или кнопку «🌐 Открыть в браузере»!`;
+        }
+
+        function switchMirror(idx, btnEl) {
+            currentMirrorIndex = idx;
+            document.querySelectorAll('.m-btn').forEach(b => b.classList.remove('active'));
+            if (btnEl) btnEl.classList.add('active');
+            loadMirrorIframe();
+        }
+
+        function openExternalMulti() {
+            const extUrl = `https://animego.org/search/all?q=${encodeURIComponent(searchQuery)}`;
+            if (tg && tg.openLink) tg.openLink(extUrl);
+            else window.open(extUrl, '_blank');
+        }
+
         async function selectVoiceEngine(engine, tabEl) {
             document.querySelectorAll('.v-tab').forEach(t => t.classList.remove('active'));
             if (tabEl) tabEl.classList.add('active');
@@ -238,6 +334,7 @@
             if (engine === 'anilibria') {
                 multiIframe.style.display = 'none';
                 multiIframe.src = '';
+                mirrorBar.style.display = 'none';
                 video.style.display = 'block';
                 hlsBlock.style.display = 'block';
                 if (episodes.length > 0) {
@@ -253,7 +350,7 @@
             video.style.display = 'none';
             hlsBlock.style.display = 'none';
             multiIframe.style.display = 'block';
-            statusEl.textContent = "Загружаем мульти-плеер со всеми студиями озвучки...";
+            mirrorBar.style.display = 'flex';
 
             if (!shikiId) {
                 try {
@@ -263,13 +360,7 @@
                 } catch (e) {}
             }
 
-            if (shikiId) {
-                multiIframe.src = `https://kodik.cc/find-player?shikimoriID=${encodeURIComponent(shikiId)}`;
-                statusEl.textContent = "🎙 Выбери нужную озвучку и серию в верхнем углу видео! Кнопка ✨ AI 4K работает поверх.";
-            } else {
-                multiIframe.src = `https://kodik.cc/find-player?title=${encodeURIComponent(searchQuery)}`;
-                statusEl.textContent = "🎙 Мульти-плеер всех озвучек активен!";
-            }
+            loadMirrorIframe();
         }
 
         function cleanTitle(str) {
@@ -308,7 +399,7 @@
             if (!release || !release.episodes || release.episodes.length === 0) {
                 metaEl.textContent = "В базе AniLibria нет • Включен плеер всех озвучек";
                 const multiTab = document.querySelectorAll('.v-tab')[1];
-                selectVoiceEngine('kodik', multiTab);
+                selectVoiceEngine('multi', multiTab);
                 return;
             }
 
@@ -403,6 +494,7 @@
                 document.getElementById('tab-libria').classList.add('active');
                 currentEngine = 'anilibria';
                 multiIframe.style.display = 'none';
+                mirrorBar.style.display = 'none';
                 video.style.display = 'block';
                 hlsBlock.style.display = 'block';
                 loadAnime(val);
