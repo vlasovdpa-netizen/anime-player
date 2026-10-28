@@ -24,7 +24,6 @@
         video, iframe { width: 100%; height: 100%; outline: none; border: none; transition: filter 0.25s ease; }
         #multi-iframe { display: none; }
 
-        /* Контурный шейдер Anime4K (применяется и к HTML5 video, и к iframe со всеми озвучками!) */
         .ai-upscale-active {
             filter: url(#anime4k-shader) contrast(1.07) saturate(1.14);
         }
@@ -58,7 +57,6 @@
 </head>
 <body>
 
-    <!-- Двухступенчатый SVG-шейдер Anime4K: сглаживание шума + контурная резкость линий рисовки -->
     <svg style="position: absolute; width: 0; height: 0;" aria-hidden="true">
         <filter id="anime4k-shader" color-interpolation-filters="sRGB">
             <feConvolveMatrix order="3 3" preserveAlpha="true" kernelMatrix="0 -0.65 0 -0.65 3.6 -0.65 0 -0.65 0" result="sharpened"/>
@@ -76,7 +74,7 @@
             <div class="title" id="title">Загрузка тайтла...</div>
             <div class="meta" id="meta">Подключение к серверам...</div>
             <div class="badges">
-                <div class="badge" id="vip-status">720p Free • Все серии</div>
+                <div class="badge" id="vip-status">720p Бесплатно • Все серии открыты</div>
                 <div class="badge ai-badge" id="ai-indicator">✨ AI Anime4K ON</div>
             </div>
         </div>
@@ -88,23 +86,20 @@
             <button class="ov-btn" onclick="toggleFullscreen()">⛶ Экран</button>
         </div>
 
-        <!-- Ядро 1: Прямой HLS плеер (anilibria.top) -->
         <video id="video" controls playsinline></video>
-
-        <!-- Ядро 2: Встроенный мульти-плеер со всеми озвучками -->
         <iframe id="multi-iframe" allowfullscreen allow="autoplay; fullscreen"></iframe>
         
         <div class="paywall-overlay" id="paywall">
             <h3>👑 1080p FHD и ✨ AI Anime4K</h3>
-            <p>В бесплатном режиме доступно качество 720p. Разблокируй 1080p, нейро-улучшение рисовки Anime4K и VIP-режим навсегда за 5 ⭐️!</p>
+            <p>В 720p все серии открыты бесплатно! Разблокируй качество 1080p и нейро-апскейл контуров рисовки Anime4K всего за 5 ⭐️!</p>
             <div class="paywall-btns">
-                <button class="buy-btn" onclick="openVipPurchase()">Открыть за 5 ⭐️</button>
-                <button class="back-720-btn" onclick="fallbackTo720()">Остаться на 720p</button>
+                <button class="buy-btn" onclick="openVipPurchase()">Разблокировать за 5 ⭐️</button>
+                <button class="back-720-btn" onclick="fallbackTo720()">Смотреть бесплатно в 720p</button>
             </div>
         </div>
     </div>
 
-    <!-- Быстрые кнопки выбора студий озвучки прямо под видео -->
+    <!-- Вкладки выбора любой озвучки -->
     <div class="voice-tabs">
         <div class="v-tab active" id="tab-libria" onclick="selectVoiceEngine('anilibria', this)">🎙 AniLibria (HLS)</div>
         <div class="v-tab" onclick="selectVoiceEngine('kodik', this)">🎙 Студийная Банда</div>
@@ -134,7 +129,7 @@
 
     <div id="hls-episodes-block">
         <div class="episodes-title">
-            <span>Серии (AniLibria):</span>
+            <span>Все серии доступны бесплатно:</span>
             <span id="ep-counter">0 сер.</span>
         </div>
         <div class="ep-grid" id="episodes"></div>
@@ -214,7 +209,7 @@
             aiBtn.classList.toggle('active-ai', aiEnabled);
             aiIndicator.style.display = aiEnabled ? 'inline-block' : 'none';
             statusEl.textContent = aiEnabled 
-                ? "✨ Шейдер Anime4K включен! Линии рисовки и контраст усилены в реальном времени." 
+                ? "✨ Шейдер Anime4K включен! Контуры рисовки улучшены в реальном времени." 
                 : "Обычный режим без нейро-фильтра";
         }
 
@@ -235,7 +230,6 @@
             }
         }
 
-        // Переключение между прямым HLS (AniLibria) и встроенным Мульти-плеером со всеми озвучками
         async function selectVoiceEngine(engine, tabEl) {
             document.querySelectorAll('.v-tab').forEach(t => t.classList.remove('active'));
             if (tabEl) tabEl.classList.add('active');
@@ -254,7 +248,6 @@
                 return;
             }
 
-            // Останавливаем HLS и включаем встроенный плеер всех озвучек внутри окна
             if (hls) hls.destroy();
             video.pause();
             video.style.display = 'none';
@@ -262,7 +255,6 @@
             multiIframe.style.display = 'block';
             statusEl.textContent = "Загружаем мульти-плеер со всеми студиями озвучки...";
 
-            // Если нет Shikimori ID, быстро узнаем его по названию
             if (!shikiId) {
                 try {
                     const r = await fetch(`https://shikimori.one/api/animes?search=${encodeURIComponent(searchQuery)}&limit=1`);
@@ -271,10 +263,9 @@
                 } catch (e) {}
             }
 
-            // Открываем мульти-плеер с выбором Студийной Банды, AniDub, SHIZA, Субтитров прямо в iframe
             if (shikiId) {
                 multiIframe.src = `https://kodik.cc/find-player?shikimoriID=${encodeURIComponent(shikiId)}`;
-                statusEl.textContent = "🎙 Выбери нужную озвучку и серию в верхнем левом углу плеера! Фильтр ✨ AI 4K работает поверх видео.";
+                statusEl.textContent = "🎙 Выбери нужную озвучку и серию в верхнем углу видео! Кнопка ✨ AI 4K работает поверх.";
             } else {
                 multiIframe.src = `https://kodik.cc/find-player?title=${encodeURIComponent(searchQuery)}`;
                 statusEl.textContent = "🎙 Мульти-плеер всех озвучек активен!";
@@ -315,15 +306,14 @@
 
             const release = await fetchRelease(q);
             if (!release || !release.episodes || release.episodes.length === 0) {
-                metaEl.textContent = "В базе AniLibria не найдено • Включаем мульти-озвучку";
-                // Автоматически переключаем на вкладку всех озвучек, если тайтла нет на Анилибрии!
+                metaEl.textContent = "В базе AniLibria нет • Включен плеер всех озвучек";
                 const multiTab = document.querySelectorAll('.v-tab')[1];
                 selectVoiceEngine('kodik', multiTab);
                 return;
             }
 
             titleEl.textContent = release.name?.main || q;
-            metaEl.textContent = `Серий: ${release.episodes.length} • Выбери озвучку ниже`;
+            metaEl.textContent = `Серий: ${release.episodes.length} • Выбирай озвучку ниже`;
             document.getElementById('ep-counter').textContent = `${release.episodes.length} сер.`;
             if (release.poster?.src) {
                 posterEl.src = `https://anilibria.top${release.poster.src}`;
